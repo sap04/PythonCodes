@@ -1,0 +1,338 @@
+package com.notesapp.utils;
+
+import com.notesapp.models.Note;
+import com.notesapp.models.User;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ExcelUtil {
+
+    private static final String EXCEL_FILE_PATH = "path/to/your/excel/file.xlsx"; // Update this path
+
+    public static List<Note> getNotes() {
+        List<Note> notesList = new ArrayList<>();
+        try (FileInputStream file = new FileInputStream(EXCEL_FILE_PATH);
+             Workbook workbook = new XSSFWorkbook(file)) {
+            
+            Sheet sheet = workbook.getSheetAt(1); // Assuming notes are in the second sheet (index 1)
+
+            for (Row row : sheet) {
+                if (row.getRowNum() == 0) continue; // Skip header row
+
+                Note note = new Note();
+                note.setCategory(row.getCell(0).getStringCellValue());
+                note.setTitle(row.getCell(1).getStringCellValue());
+                note.setDescription(row.getCell(2).getStringCellValue());
+                note.setNewTitle(row.getCell(3).getStringCellValue());
+                note.setNewDescription(row.getCell(4).getStringCellValue());
+
+                notesList.add(note);
+            }
+        } catch (IOException e) {
+            e.printStackTrace(); // Handle exception appropriately
+        }
+        return notesList;
+    }
+
+    public static List<User> getUsers() {
+        List<User> usersList = new ArrayList<>();
+        try (FileInputStream file = new FileInputStream(EXCEL_FILE_PATH);
+             Workbook workbook = new XSSFWorkbook(file)) {
+            
+            Sheet sheet = workbook.getSheetAt(0); // Assuming users are in the first sheet (index 0)
+
+            for (Row row : sheet) {
+                if (row.getRowNum() == 0) continue; // Skip header row
+
+                User user = new User();
+                user.setEmail(row.getCell(0).getStringCellValue());
+                user.setName(row.getCell(1).getStringCellValue());
+                user.setPassword(row.getCell(2).getStringCellValue());
+                user.setConfirmPassword(row.getCell(3).getStringCellValue());
+                user.setPhone(row.getCell(4).getStringCellValue());
+                user.setCompany(row.getCell(5).getStringCellValue());
+                user.setNewPassword(row.getCell(6).getStringCellValue());
+
+                usersList.add(user);
+            }
+        } catch (IOException e) {
+            e.printStackTrace(); // Handle exception appropriately
+        }
+        return usersList;
+    }
+}
+package com.notesapp.tests;
+
+import com.notesapp.pages.NotesPage;
+import com.notesapp.utils.ExcelUtil;
+import com.notesapp.models.Note;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
+import io.restassured.response.Response;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
+
+import java.util.List;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+
+public class NotesAPITests extends BaseTest {
+
+    private NotesPage notesPage;
+    private String token;
+
+    @BeforeClass
+    public void setup() {
+        RestAssured.baseURI = "http://your-api-url.com"; // Update with your API base URL
+        // Assuming token is obtained after logging in a user
+        token = "your_token"; // Update with a method to retrieve token from login
+        notesPage = new NotesPage();
+    }
+
+    @DataProvider(name = "notesData")
+    public Object[][] notesData() {
+        List<Note> notes = ExcelUtil.getNotes();
+        Object[][] data = new Object[notes.size()][1];
+        for (int i = 0; i < notes.size(); i++) {
+            data[i][0] = notes.get(i);
+        }
+        return data;
+    }
+
+    @Test(dataProvider = "notesData", groups = {"Sanity"})
+    public void createNote_Positive(Note note) {
+        Response response = given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(note)
+                .when()
+                .post("/notes")
+                .then()
+                .statusCode(201) // HTTP status code for created
+                .contentType(ContentType.JSON)
+                .extract().response();
+
+        note.setId(response.jsonPath().getInt("id")); // Store the generated ID for further tests
+        notesPage.setNoteId(note.getId()); // Store ID in NotesPage if needed
+    }
+
+    @Test(dataProvider = "notesData", groups = {"Regression"})
+    public void createNote_Negative(Note note) {
+        note.setTitle(""); // Making title empty for negative test case
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(note)
+                .when()
+                .post("/notes")
+                .then()
+                .statusCode(400) // Assuming 400 for bad request
+                .body("message", equalTo("Title cannot be empty")); // Update message based on API response
+    }
+
+    @Test(groups = {"Sanity"})
+    public void getAllNotes_Positive() {
+        Response response = given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/notes")
+                .then()
+                .statusCode(200)
+                .contentType(ContentType.JSON)
+                .extract().response();
+
+        // Add assertions to verify the retrieved notes if needed
+    }
+
+    @Test(groups = {"Regression"})
+    public void deleteNote_Positive() {
+        int noteId = notesPage.getNoteId(); // Get ID from previous test
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .delete("/notes/" + noteId)
+                .then()
+                .statusCode(204); // Assuming 204 for no content on successful deletion
+    }
+
+    // Add other tests for GET, PUT, PATCH, and DELETE as needed
+}
+package com.notesapp.tests;
+
+import com.notesapp.models.User;
+import com.notesapp.pages.UserPage;
+import com.notesapp.utils.ExcelUtil;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
+import io.restassured.response.Response;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
+
+import java.util.List;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+
+public class UserAPITests extends BaseTest {
+
+    private UserPage userPage;
+    private String token; // For token storage after login
+
+    @BeforeClass
+    public void setup() {
+        RestAssured.baseURI = "http://your-api-url.com"; // Update with your API base URL
+        userPage = new UserPage();
+    }
+
+    @DataProvider(name = "userData")
+    public Object[][] userData() {
+        List<User> users = ExcelUtil.getUsers();
+        Object[][] data = new Object[users.size()][1];
+        for (int i = 0; i < users.size(); i++) {
+            data[i][0] = users.get(i);
+        }
+        return data;
+    }
+
+    @Test(dataProvider = "userData", groups = {"Sanity"})
+    public void registerUser_Positive(User user) {
+        given()
+                .contentType(ContentType.JSON)
+                .body(user)
+                .when()
+                .post("/users/register")
+                .then()
+                .statusCode(201) // Assuming successful registration returns 201
+                .contentType(ContentType.JSON)
+                .body("message", equalTo("User created successfully")); // Modify according to API response
+    }
+
+    @Test(dataProvider = "userData", groups = {"Regression"})
+    public void registerUser_Negative(User user) {
+        user.setEmail(""); // Intentionally set an invalid email
+        given()
+                .contentType(ContentType.JSON)
+                .body(user)
+                .when()
+                .post("/users/register")
+                .then()
+                .statusCode(400) // Assuming 400 for invalid input
+                .body("message", equalTo("Email cannot be empty")); // Modify based on actual API response
+    }
+
+    @Test(dataProvider = "userData", groups = {"Sanity"})
+    public void loginUser_Positive(User user) {
+        Response response = given()
+                .contentType(ContentType.JSON)
+                .body(user)
+                .when()
+                .post("/users/login")
+                .then()
+                .statusCode(200)
+                .contentType(ContentType.JSON)
+                .body("message", equalTo("Login successful")) // Modify according to API response
+                .extract().response();
+
+        token = response.jsonPath().getString("token"); // Extract token after login
+        userPage.setToken(token); // Set token in UserPage for later use
+    }
+
+    @Test(dataProvider = "userData", groups = {"Regression"})
+    public void loginUser_Negative(User user) {
+        user.setPassword("wrongpassword"); // Set wrong password for negative test
+        given()
+                .contentType(ContentType.JSON)
+                .body(user)
+                .when()
+                .post("/users/login")
+                .then()
+                .statusCode(401) // Assuming 401 for unauthorized
+                .body("message", equalTo("Invalid credentials")); // Modify based on API response
+    }
+
+    @Test(groups = {"Sanity"})
+    public void getUserProfile_Positive() {
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/users/profile")
+                .then()
+                .statusCode(200)
+                .contentType(ContentType.JSON)
+                .body("email", equalTo(userPage.getEmail())); // Assuming you want to validate against stored data
+    }
+
+    @Test(groups = {"Regression"})
+    public void getUserProfile_Negative() {
+        given()
+                .header("Authorization", "Bearer " + "invalidToken")
+                .when()
+                .get("/users/profile")
+                .then()
+                .statusCode(401) // Assuming 401 for unauthorized due to invalid token
+                .body("message", equalTo("Invalid token")); // Modify based on actual API response
+    }
+
+    @Test(dataProvider = "userData", groups = {"Sanity"})
+    public void updateUserProfile_Positive(User user) {
+        user.setName("Updated Name"); // Change some fields for update
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(user)
+                .when()
+                .patch("/users/profile")
+                .then()
+                .statusCode(200)
+                .body("message", equalTo("Profile updated successfully")); // Modify according to API response
+    }
+
+    @Test(dataProvider = "userData", groups = {"Regression"})
+    public void updateUserProfile_Negative(User user) {
+        user.setEmail(""); // Set an invalid email for negative test
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(user)
+                .when()
+                .patch("/users/profile")
+                .then()
+                .statusCode(400) // Assuming 400 for invalid input
+                .body("message", equalTo("Email cannot be empty")); // Modify based on actual API response
+    }
+
+    @Test(dataProvider = "userData", groups = {"Sanity"})
+    public void changePassword_Positive(User user) {
+        String payload = "{ \"currentPassword\": \"" + user.getPassword() + "\", \"newPassword\": \"" + user.getNewPassword() + "\" }";
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(payload)
+                .when()
+                .post("/users/change-password")
+                .then()
+                .statusCode(200)
+                .body("message", equalTo("Password changed successfully")); // Modify according to API response
+    }
+
+    @Test(dataProvider = "userData", groups = {"Regression"})
+    public void changePassword_Negative(User user) {
+        String payload = "{ \"currentPassword\": \"wrongPassword\", \"newPassword\": \"" + user.getNewPassword() + "\" }";
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body(payload)
+                .when()
+                .post("/users/change-pass
