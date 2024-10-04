@@ -1,0 +1,127 @@
+package com.notesapp.utils;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+public class ExcelUtil {
+    private static final String EXCEL_FILE_PATH = "src/main/resources/data.xlsx";
+    private Workbook workbook;
+
+    public ExcelUtil() throws IOException {
+        FileInputStream fileInputStream = new FileInputStream(EXCEL_FILE_PATH);
+        workbook = new XSSFWorkbook(fileInputStream);
+    }
+
+    public Map<String, String> getUserData(String sheetName, int rowNum) {
+        Sheet sheet = workbook.getSheet(sheetName);
+        Map<String, String> userData = new HashMap<>();
+        Row row = sheet.getRow(rowNum);
+
+        userData.put("email", getCellValue(row.getCell(0)));
+        userData.put("name", getCellValue(row.getCell(1)));
+        userData.put("password", getCellValue(row.getCell(2)));
+        userData.put("confirmPassword", getCellValue(row.getCell(3)));
+        userData.put("phone", getCellValue(row.getCell(4)));
+        userData.put("company", getCellValue(row.getCell(5)));
+        userData.put("newPassword", getCellValue(row.getCell(6)));
+
+        return userData;
+    }
+
+    public Map<String, String> getNoteData(String sheetName, int rowNum) {
+        Sheet sheet = workbook.getSheet(sheetName);
+        Map<String, String> noteData = new HashMap<>();
+        Row row = sheet.getRow(rowNum);
+
+        noteData.put("category", getCellValue(row.getCell(0)));
+        noteData.put("title", getCellValue(row.getCell(1)));
+        noteData.put("description", getCellValue(row.getCell(2)));
+        noteData.put("newTitle", getCellValue(row.getCell(3)));
+        noteData.put("newDescription", getCellValue(row.getCell(4)));
+
+        return noteData;
+    }
+
+    private String getCellValue(Cell cell) {
+        return cell.getCellType() == CellType.STRING ? cell.getStringCellValue() : String.valueOf((int) cell.getNumericCellValue());
+    }
+
+    public void closeWorkbook() throws IOException {
+        workbook.close();
+    }
+}
+package com.notesapp.utils;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Properties;
+
+public class ConfigUtil {
+    private static final String CONFIG_FILE_PATH = "src/main/resources/config.properties";
+    private static Properties properties;
+
+    static {
+        try (FileInputStream input = new FileInputStream(CONFIG_FILE_PATH)) {
+            properties = new Properties();
+            properties.load(input);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String getProperty(String key) {
+        return properties.getProperty(key);
+    }
+}
+package com.notesapp.tests;
+
+import com.notesapp.utils.APIUtil;
+import com.notesapp.utils.ConfigUtil;
+import io.restassured.RestAssured;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+
+public abstract class BaseTest {
+
+    protected String token;
+
+    @BeforeMethod(alwaysRun = true)
+    public void setUp() {
+        RestAssured.baseURI = ConfigUtil.getProperty("baseUrl");
+        token = APIUtil.authenticateAndGetToken();
+    }
+
+    @AfterMethod(alwaysRun = true)
+    public void tearDown() {
+        // Code to handle clean-up actions after tests if necessary
+    }
+}
+package com.notesapp.models;
+
+public class Note {
+    private String category;
+    private String title;
+    private String description;
+    private String newTitle;
+    private String newDescription;
+
+    // Getters and setters can be implemented here
+}
+package com.notesapp.models;
+
+public class User {
+    private String email;
+    private String name;
+    private String password;
+    private String confirmPassword;
+    private String phone;
+    private String company;
+    private String newPassword;
+
+    // Getters and setters can be implemented here
+}
