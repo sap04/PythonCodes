@@ -1,0 +1,372 @@
+package com.notesapp.pages;
+
+import com.notesapp.models.User;
+import com.notesapp.utils.APIUtil;
+import io.restassured.response.Response;
+
+public class UserPage {
+    private String baseUrl = "http://your-api-url.com/api"; // Replace with your API URL
+
+    public Response registerUser(User user) {
+        return APIUtil.sendPostRequest(baseUrl + "/users/register", user);
+    }
+
+    public Response loginUser(User user) {
+        return APIUtil.sendPostRequest(baseUrl + "/users/login", user);
+    }
+
+    public Response getUserProfile(String token) {
+        return APIUtil.sendGetRequest(baseUrl + "/users/profile", token);
+    }
+
+    public Response updateUserProfile(User user) {
+        return APIUtil.sendPatchRequest(baseUrl + "/users/profile", user, user.getToken());
+    }
+
+    public Response changePassword(User user) {
+        return APIUtil.sendPostRequest(baseUrl + "/users/change-password", user, user.getToken());
+    }
+
+    public Response logoutUser(String token) {
+        return APIUtil.sendDeleteRequest(baseUrl + "/users/logout", token);
+    }
+
+    public Response deleteUserAccount(String token) {
+        return APIUtil.sendDeleteRequest(baseUrl + "/users/delete-account", token);
+    }
+}
+package com.notesapp.pages;
+
+import com.notesapp.models.Note;
+import com.notesapp.utils.APIUtil;
+import io.restassured.response.Response;
+
+public class NotesPage {
+    private String baseUrl = "http://your-api-url.com/api"; // Replace with your API URL
+
+    public Response createNote(Note note) {
+        return APIUtil.sendPostRequest(baseUrl + "/notes", note);
+    }
+
+    public Response getAllNotes() {
+        return APIUtil.sendGetRequest(baseUrl + "/notes", null);
+    }
+
+    public Response getNoteById(String id) {
+        return APIUtil.sendGetRequest(baseUrl + "/notes/" + id, null);
+    }
+
+    public Response updateNote(Note note) {
+        return APIUtil.sendPatchRequest(baseUrl + "/notes/" + note.getId(), note, note.getToken());
+    }
+
+    public Response patchNoteStatus(String id, boolean status) {
+        return APIUtil.sendPatchRequest(baseUrl + "/notes/" + id, status, null);
+    }
+
+    public Response deleteNoteById(String id) {
+        return APIUtil.sendDeleteRequest(baseUrl + "/notes/" + id, null);
+    }
+}
+package com.notesapp.utils;
+
+import io.restassured.RestAssured;
+import io.restassured.response.Response;
+
+import java.util.Map;
+
+public class APIUtil {
+
+    public static Response sendPostRequest(String url, Object body) {
+        try {
+            return RestAssured.given()
+                    .contentType("application/json")
+                    .body(body)
+                    .when()
+                    .post(url);
+        } catch (Exception e) {
+            System.err.println("Error during POST request: " + e.getMessage());
+            return null; // Or throw a custom exception
+        }
+    }
+
+    public static Response sendPostRequest(String url, Object body, String token) {
+        try {
+            return RestAssured.given()
+                    .contentType("application/json")
+                    .header("Authorization", "Bearer " + token)
+                    .body(body)
+                    .when()
+                    .post(url);
+        } catch (Exception e) {
+            System.err.println("Error during POST request: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static Response sendGetRequest(String url, String token) {
+        try {
+            return RestAssured.given()
+                    .header("Authorization", "Bearer " + token)
+                    .when()
+                    .get(url);
+        } catch (Exception e) {
+            System.err.println("Error during GET request: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static Response sendPatchRequest(String url, Object body, String token) {
+        try {
+            return RestAssured.given()
+                    .contentType("application/json")
+                    .header("Authorization", "Bearer " + token)
+                    .body(body)
+                    .when()
+                    .patch(url);
+        } catch (Exception e) {
+            System.err.println("Error during PATCH request: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static Response sendDeleteRequest(String url, String token) {
+        try {
+            return RestAssured.given()
+                    .header("Authorization", "Bearer " + token)
+                    .when()
+                    .delete(url);
+        } catch (Exception e) {
+            System.err.println("Error during DELETE request: " + e.getMessage());
+            return null;
+        }
+    }
+}
+package com.notesapp.tests;
+
+import com.notesapp.models.Note;
+import com.notesapp.pages.NotesPage;
+import com.notesapp.utils.ExcelUtil;
+import io.restassured.response.Response;
+import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+
+import java.util.List;
+
+public class NotesAPITests {
+    private NotesPage notesPage;
+
+    @BeforeClass
+    public void setup() {
+        notesPage = new NotesPage();
+    }
+
+    @Test(priority = 1, groups = {"Sanity"})
+    public void testCreateNotesPositive() {
+        List<Note> notes = ExcelUtil.getNotes("data.xlsx");
+        for (Note note : notes) {
+            Response response = notesPage.createNote(note);
+            Assert.assertEquals(response.getStatusCode(), 201, "Note creation failed for: " + note.getTitle());
+            Assert.assertEquals(response.contentType(), "application/json", "Incorrect content type for note creation: " + note.getTitle());
+        }
+    }
+
+    @Test(priority = 2, groups = {"Sanity"})
+    public void testCreateNotesNegative() {
+        Note invalidNote = new Note();
+        invalidNote.setTitle(""); // Empty title
+        Response response = notesPage.createNote(invalidNote);
+        Assert.assertEquals(response.getStatusCode(), 400, "Expected error for invalid note creation.");
+    }
+
+    @Test(priority = 3, groups = {"Sanity"})
+    public void testGetAllNotesPositive() {
+        Response response = notesPage.getAllNotes();
+        Assert.assertEquals(response.getStatusCode(), 200, "Getting all notes failed.");
+    }
+
+    @Test(priority = 4, groups = {"Sanity"})
+    public void testGetNoteByIdPositive() {
+        List<Note> notes = ExcelUtil.getNotes("data.xlsx");
+        for (Note note : notes) {
+            Response response = notesPage.getNoteById(note.getId());
+            Assert.assertEquals(response.getStatusCode(), 200, "Getting note by ID failed for: " + note.getId());
+        }
+    }
+
+    @Test(priority = 5, groups = {"Sanity"})
+    public void testGetNoteByIdNegative() {
+        Response response = notesPage.getNoteById("invalidId");
+        Assert.assertEquals(response.getStatusCode(), 404, "Expected error for getting note by invalid ID.");
+    }
+
+    @Test(priority = 6, groups = {"Regression"})
+    public void testUpdateNotePositive() {
+        List<Note> notes = ExcelUtil.getNotes("data.xlsx");
+        for (Note note : notes) {
+            note.setNewTitle("Updated Title"); // Example new title
+            Response response = notesPage.updateNote(note);
+            Assert.assertEquals(response.getStatusCode(), 200, "Note update failed for: " + note.getTitle());
+        }
+    }
+
+    @Test(priority = 7, groups = {"Regression"})
+    public void testUpdateNoteNegative() {
+        Note invalidNote = new Note();
+        invalidNote.setId("invalidId"); // Invalid ID
+        Response response = notesPage.updateNote(invalidNote);
+        Assert.assertEquals(response.getStatusCode(), 404, "Expected error for updating note with invalid ID.");
+    }
+
+    @Test(priority = 8, groups = {"Regression"})
+    public void testPatchNoteStatusPositive() {
+        List<Note> notes = ExcelUtil.getNotes("data.xlsx");
+        for (Note note : notes) {
+            Response response = notesPage.patchNoteStatus(note.getId(), true); // Marking as completed
+            Assert.assertEquals(response.getStatusCode(), 200, "Patching note status failed for: " + note.getId());
+        }
+    }
+
+    @Test(priority = 9, groups = {"Regression"})
+    public void testDeleteNoteByIdPositive() {
+        List<Note> notes = ExcelUtil.getNotes("data.xlsx");
+        for (Note note : notes) {
+            Response response = notesPage.deleteNoteById(note.getId());
+            Assert.assertEquals(response.getStatusCode(), 204, "Deleting note failed for: " + note.getId());
+        }
+    }
+
+    @Test(priority = 10, groups = {"Regression"})
+    public void testDeleteNoteByIdNegative() {
+        Response response = notesPage.deleteNoteById("invalidId");
+        Assert.assertEquals(response.getStatusCode(), 404, "Expected error for deleting note with invalid ID.");
+    }
+}
+package com.notesapp.tests;
+
+import com.notesapp.models.User;
+import com.notesapp.pages.UserPage;
+import com.notesapp.utils.ExcelUtil;
+import io.restassured.response.Response;
+import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+
+import java.util.List;
+
+public class UserAPITests {
+    private UserPage userPage;
+
+    @BeforeClass
+    public void setup() {
+        userPage = new UserPage();
+    }
+
+    @Test(priority = 1, groups = {"Sanity"})
+    public void testUserRegistrationPositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            Response response = userPage.registerUser(user);
+            Assert.assertEquals(response.getStatusCode(), 201, "User registration failed for: " + user.getEmail());
+            Assert.assertEquals(response.contentType(), "application/json", "Incorrect content type for user registration: " + user.getEmail());
+        }
+    }
+
+    @Test(priority = 2, groups = {"Sanity"})
+    public void testUserRegistrationNegative() {
+        User invalidUser = new User();
+        invalidUser.setEmail("invalidEmail"); // Invalid email format
+        invalidUser.setPassword("12345"); // Invalid password criteria
+        Response response = userPage.registerUser(invalidUser);
+        Assert.assertEquals(response.getStatusCode(), 400, "Expected error for invalid user registration.");
+    }
+
+    @Test(priority = 3, groups = {"Sanity"})
+    public void testUserLoginPositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            Response response = userPage.loginUser(user);
+            Assert.assertEquals(response.getStatusCode(), 200, "User login failed for: " + user.getEmail());
+            Assert.assertEquals(response.contentType(), "application/json", "Incorrect content type for user login: " + user.getEmail());
+            user.setToken(response.jsonPath().getString("token")); // Storing token for future requests
+        }
+    }
+
+    @Test(priority = 4, groups = {"Sanity"})
+    public void testUserLoginNegative() {
+        User invalidUser = new User();
+        invalidUser.setEmail("wrongEmail@example.com");
+        invalidUser.setPassword("wrongPassword");
+        Response response = userPage.loginUser(invalidUser);
+        Assert.assertEquals(response.getStatusCode(), 401, "Expected error for invalid login credentials.");
+    }
+
+    @Test(priority = 5, groups = {"Regression"})
+    public void testGetUserProfilePositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            Response response = userPage.getUserProfile(user.getToken());
+            Assert.assertEquals(response.getStatusCode(), 200, "Getting user profile failed for: " + user.getEmail());
+        }
+    }
+
+    @Test(priority = 6, groups = {"Regression"})
+    public void testGetUserProfileNegative() {
+        Response response = userPage.getUserProfile("invalidToken");
+        Assert.assertEquals(response.getStatusCode(), 401, "Expected error for invalid token.");
+    }
+
+    @Test(priority = 7, groups = {"Regression"})
+    public void testUpdateUserProfilePositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            user.setName("Updated Name"); // Example update
+            Response response = userPage.updateUserProfile(user);
+            Assert.assertEquals(response.getStatusCode(), 200, "Updating user profile failed for: " + user.getEmail());
+        }
+    }
+
+    @Test(priority = 8, groups = {"Regression"})
+    public void testUpdateUserProfileNegative() {
+        User invalidUser = new User();
+        invalidUser.setToken("invalidToken");
+        Response response = userPage.updateUserProfile(invalidUser);
+        Assert.assertEquals(response.getStatusCode(), 401, "Expected error for updating profile with invalid token.");
+    }
+
+    @Test(priority = 9, groups = {"Regression"})
+    public void testChangePasswordPositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            Response response = userPage.changePassword(user);
+            Assert.assertEquals(response.getStatusCode(), 200, "Changing password failed for: " + user.getEmail());
+        }
+    }
+
+    @Test(priority = 10, groups = {"Regression"})
+    public void testChangePasswordNegative() {
+        User invalidUser = new User();
+        invalidUser.setToken("invalidToken");
+        Response response = userPage.changePassword(invalidUser);
+        Assert.assertEquals(response.getStatusCode(), 401, "Expected error for changing password with invalid token.");
+    }
+
+    @Test(priority = 11, groups = {"Regression"})
+    public void testUserLogoutPositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            Response response = userPage.logoutUser(user.getToken());
+            Assert.assertEquals(response.getStatusCode(), 204, "User logout failed for: " + user.getEmail());
+        }
+    }
+
+    @Test(priority = 12, groups = {"Regression"})
+    public void testDeleteUserAccountPositive() {
+        List<User> users = ExcelUtil.getUsers("data.xlsx");
+        for (User user : users) {
+            Response response = userPage.deleteUserAccount(user.getToken());
+            Assert.assertEquals(response.getStatusCode(), 204, "Deleting user account failed for: " + user.getEmail());
+        }
+    }
+}
