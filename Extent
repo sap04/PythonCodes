@@ -1,0 +1,128 @@
+package utilities.logging;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import com.aventstack.extentreports.ExtentTest;
+import com.aventstack.extentreports.MediaEntityBuilder;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.WebDriver;
+import org.apache.commons.io.FileUtils;
+
+import java.io.File;
+import java.io.IOException;
+
+public class CustomLogger {
+
+    private static final Logger logger = LogManager.getLogger(CustomLogger.class);
+    private ExtentTest extentTest;
+
+    // Constructor to pass ExtentTest instance
+    public CustomLogger(ExtentTest test) {
+        this.extentTest = test;
+    }
+
+    // Log information to both Logger and ExtentReports
+    public void info(String message) {
+        logger.info(message);  // Log4j logging
+        extentTest.info(message);  // ExtentReport logging
+    }
+
+    // Log errors to both Logger and ExtentReports
+    public void error(String message) {
+        logger.error(message);
+        extentTest.error(message);
+    }
+
+    // Log errors with screenshot
+    public void errorWithScreenshot(String message, WebDriver driver) {
+        String screenshotPath = takeScreenshot(driver, message); 
+        try {
+            extentTest.fail(message, MediaEntityBuilder.createScreenCaptureFromPath(screenshotPath).build());
+        } catch (IOException e) {
+            logger.error("Failed to attach screenshot: " + e.getMessage());
+        }
+    }
+
+    // Helper method to take screenshot
+    private String takeScreenshot(WebDriver driver, String screenshotName) {
+        File srcFile = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+        String destPath = "screenshots/" + screenshotName + ".png";
+        try {
+            FileUtils.copyFile(srcFile, new File(destPath));
+        } catch (IOException e) {
+            logger.error("Failed to capture screenshot: " + e.getMessage());
+        }
+        return destPath;
+    }
+}
+
+
+package utilities.reporting;
+
+import com.aventstack.extentreports.ExtentReports;
+import com.aventstack.extentreports.reporter.ExtentHtmlReporter;
+
+public class ExtentManager {
+    private static ExtentReports extent;
+
+    // Singleton pattern to get a single instance of ExtentReports
+    public static ExtentReports getInstance() {
+        if (extent == null) {
+            ExtentHtmlReporter htmlReporter = new ExtentHtmlReporter("test-output/extent.html");
+            extent = new ExtentReports();
+            extent.attachReporter(htmlReporter);
+        }
+        return extent;
+    }
+}
+
+
+package listeners;
+
+import org.testng.ITestListener;
+import org.testng.ITestResult;
+import utilities.logging.CustomLogger;
+import utilities.reporting.ExtentManager;
+import com.aventstack.extentreports.ExtentReports;
+import com.aventstack.extentreports.ExtentTest;
+import org.openqa.selenium.WebDriver;
+
+public class TestListener implements ITestListener {
+
+    private static ExtentReports extent = ExtentManager.getInstance();
+    private static ThreadLocal<ExtentTest> extentTest = new ThreadLocal<>();
+    private WebDriver driver;
+
+    @Override
+    public void onTestStart(ITestResult result) {
+        extentTest.set(extent.createTest(result.getMethod().getMethodName()));
+    }
+
+    @Override
+    public void onTestFailure(ITestResult result) {
+        CustomLogger customLogger = new CustomLogger(extentTest.get());
+        customLogger.errorWithScreenshot("Test Failed: " + result.getName(), driver);
+    }
+
+    @Override
+    public void onTestSuccess(ITestResult result) {
+        customLogger.info("Test passed: " + result.getMethod().getMethodName());
+    }
+
+    @Override
+    public void onTestSkipped(ITestResult result) {
+        customLogger.info("Test skipped: " + result.getMethod().getMethodName());
+    }
+}
+
+<suite name="Test Suite">
+    <listeners>
+        <listener class-name="listeners.TestListener" />
+    </listeners>
+    <test name="Sample Test">
+        <classes>
+            <class name="tests.MyTest" />
+        </classes>
+    </test>
+</suite>
